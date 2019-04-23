@@ -88,6 +88,7 @@ library(mltools)
 ```
 
 - One hot encoding features of the training and testing dataset as some columns are of string type.
+
 ```{r}
 X_train <- one_hot(as.data.table(X_train))
 X_test <- one_hot(as.data.table(X_test))
@@ -95,15 +96,21 @@ X_test <- one_hot(as.data.table(X_test))
 ```
 
 - Scaling column values to normalize them so as to bring uniformity in the data
+
 ```{r}
 X_train$Product_Category_1 = scale(X_train$Product_Category_1)
 X_train$Product_Category_2 = scale(X_train$Product_Category_2)
 X_train$Product_Category_3 = scale(X_train$Product_Category_3)
+```
+
+```{r}
 
 X_test$Product_Category_1 = scale(X_test$Product_Category_1)
 X_test$Product_Category_2 = scale(X_test$Product_Category_2)
 X_test$Product_Category_3 = scale(X_test$Product_Category_3)
 ```
+
+- Adding a new column in the X_train.
 
 ```{r}
 X_train$Purchases<- Y_train
@@ -114,16 +121,19 @@ library(rpart)
 ```
 
 - Initializing and training the model 
+
 ```{r}
 model = rpart(Purchases~.,data = X_train)
 ```
 
 - Predicting on test data
+
 ```{r}
 Y_pred = predict(model, X_test)
 ```
 
 - Recording the results
+
 ```{r}
 df <- data.frame(User_ID = test.df$User_ID, Product_ID = test.df$Product_ID, Purchase = Y_pred)
 ```

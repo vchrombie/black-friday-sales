@@ -45,9 +45,9 @@ X_train$Purchases <- Y_train
 
 library(rpart)
 
-reg = rpart(Purchases~.,data = X_train)
+model = rpart(Purchases~.,data = X_train)
 
-Y_pred = predict(reg, X_test)
+Y_pred = predict(model, X_test)
 
 df <- data.frame(User_ID = test.df$User_ID, Product_ID = test.df$Product_ID, Purchase = Y_pred)
 

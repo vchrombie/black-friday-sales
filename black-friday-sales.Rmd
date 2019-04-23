@@ -1,0 +1,140 @@
+---
+title: "Black-Friday Sales Prediction"
+output: html_notebook
+---
+
+> Contest Link: https://datahack.analyticsvidhya.com/contest/black-friday/
+
+### Problem Statement
+
+A retail company “ABC Private Limited” wants to understand the customer purchase behaviour (specifically, purchase amount) against various products of different categories. They have shared purchase summary of various customers for selected high volume products from last month.
+The data set also contains customer demographics (age, gender, marital status, city_type, stay_in_current_city), product details (product_id and product category) and Total purchase_amount from last month.
+
+Now, they want to build a model to predict the purchase amount of customer against various products which will help them to create personalized offer for customers against different products.
+
+### Solution
+
+Lets start with analyzing the dataset. We can get the dataset from the [contest link](https://datahack.analyticsvidhya.com/contest/black-friday/). You can download it from the repository.
+
+- Lets load the train and test dataset into the dataframe. As we see, header is present in the dataset, lets pass with the argument, `header=TRUE` to avoid problems.
+
+```{r}
+train.df <- read.csv("train.csv", header = TRUE)
+test.df <- read.csv("test.csv", header = TRUE) 
+```
+
+- Lets have a look at the dimensions of the datasets first.
+
+```{r}
+dim(train.df)
+dim(test.df)
+```
+
+- We will have a look at the Training set dataframe.
+
+```{r}
+train.df
+```
+
+- Well, as the train and test dataframes have the same columns, we will start our analysis by looking, if we have any missing values in the dataframe.
+
+```{r}
+any(is.na(train.df))
+```
+
+- As we see we are having missing values in the dataframe, we need to know what columns has the missing values.
+
+```{r}
+names(which(sapply(train.df, anyNA)))
+```
+
+- Lets see the summary of each dataframes to get the count of the missing values in each dataframe.
+
+```{r}
+summary(train.df)
+summary(test.df)
+```
+
+- As we have missing values, lets impute the missing values with one value.
+
+```{r}
+train.df[10][is.na(train.df[10])] <- 20
+train.df[11][is.na(train.df[11])] <- 20
+```
+
+
+```{r}
+test.df[10][is.na(test.df[10])] <- 20
+test.df[11][is.na(test.df[11])] <- 20
+```
+
+```{r}
+sum(is.na(train.df))
+sum(is.na(test.df))
+```
+
+
+- Now, as we got rid of the missing values,
+
+```{r}
+X_train = train.df[3:11]
+Y_train = train.df[12]
+```
+
+```{r}
+X_test = test.df[3:11]  
+```
+
+
+```{r}
+library(data.table)
+library(mltools)
+```
+```{r}
+X_train <- one_hot(as.data.table(X_train))
+X_test <- one_hot(as.data.table(X_test))
+
+```
+
+```{r}
+X_train$Product_Category_1 = scale(X_train$Product_Category_1)
+X_train$Product_Category_2 = scale(X_train$Product_Category_2)
+X_train$Product_Category_3 = scale(X_train$Product_Category_3)
+
+X_test$Product_Category_1 = scale(X_test$Product_Category_1)
+X_test$Product_Category_2 = scale(X_test$Product_Category_2)
+X_test$Product_Category_3 = scale(X_test$Product_Category_3)
+```
+
+```{r}
+X_train$Purchases<- Y_train
+```
+
+```{r}
+library(rpart)
+```
+
+```{r}
+reg = rpart(Purchases~.,data = X_train)
+```
+
+```{r}
+Y_pred = predict(reg, X_test)
+```
+
+
+```{r}
+df <- data.frame(User_ID = test.df$User_ID, Product_ID = test.df$Product_ID, Purchase = Y_pred)
+```
+
+
+
+```{r}
+head(df)
+```
+
+- Writing the result to a file.
+
+```{r}
+write.csv(df,"result.csv",row.names = FALSE)
+```

@@ -71,75 +71,132 @@ sum(is.na(test.df))
 ```
 
 
-- Dividing both the datasets into features and labels for simplicity.
-
 ```{r}
-X_train = train.df[3:11]
-Y_train = train.df[12]
+train$data <- 1
+test$Purchase <- 0
+test$data <- 0
 ```
 
 ```{r}
-X_test = test.df[3:11]  
+total <- rbind(train,test)
 ```
 
 ```{r}
-library(data.table)
-library(mltools)
-```
-
-- One hot encoding features of the training and testing dataset as some columns are of string type.
-
-```{r}
-X_train <- one_hot(as.data.table(X_train))
-X_test <- one_hot(as.data.table(X_test))
-
-```
-
-- Scaling column values to normalize them so as to bring uniformity in the data
-
-```{r}
-X_train$Product_Category_1 = scale(X_train$Product_Category_1)
-X_train$Product_Category_2 = scale(X_train$Product_Category_2)
-X_train$Product_Category_3 = scale(X_train$Product_Category_3)
+for (i in 1:11)
+{
+  total[,i] <- as.factor(total[,i])
+}
 ```
 
 ```{r}
-
-X_test$Product_Category_1 = scale(X_test$Product_Category_1)
-X_test$Product_Category_2 = scale(X_test$Product_Category_2)
-X_test$Product_Category_3 = scale(X_test$Product_Category_3)
+train.notmar <- total[total$Marital_Status == 0 ,] 
+train.notmar <- train.notmar[train.notmar$data == 1,]
+test.notmar <- total[total$data == 0 ,]
 ```
-
-- Adding a new column in the X_train.
 
 ```{r}
-X_train$Purchases<- Y_train
+test.notmar$Purchase <- NULL
+test.notmar$data <- NULL
+train.notmar$data <- NULL
 ```
+
+- Decision Tree
 
 ```{r}
 library(rpart)
 ```
 
-- Initializing and training the model 
-
 ```{r}
-model = rpart(Purchases~.,data = X_train)
+model <- rpart(Purchase ~ .,data = train.notmar)
+pred_tree <- predict(model, test.notmar)
 ```
 
-- Predicting on test data
-
 ```{r}
-Y_pred = predict(model, X_test)
+submit <- data.frame(User_ID = test$User_ID,
+                     Product_ID = test$Product_ID,
+                     Purchase = pred_tree)
 ```
 
-- Recording the results
+- XGboost
 
 ```{r}
-df <- data.frame(User_ID = test.df$User_ID, Product_ID = test.df$Product_ID, Purchase = Y_pred)
+library(xgboost)
 ```
 
-- Writing the result to a csv file -result.csv.
+```{r}
+for (i in 1:12)
+{
+  train.notmar[,i] <-  as.numeric(train.notmar[,i])
+}
+```
 
 ```{r}
-write.csv(df,"result.csv",row.names = FALSE)
+for (i in 1:11)
+{
+  test.notmar[,i] <-  as.numeric(test.notmar[,i])
+}
+
+```
+
+- Features
+
+```{r}
+X_features <- c( "User_ID" , "Product_ID" , "Gender" ,                   
+                 "Age" , "Occupation" ,  "City_Category" ,           
+                 "Stay_In_Current_City_Years" , "Product_Category_1" ,       
+                 "Product_Category_2" , "Product_Category_3")
+```
+
+```{r}
+X_target <- train.notmar$Purchase
+```
+
+```{r}
+xgtrain <- xgb.DMatrix(data <- as.matrix(train.notmar[, X_features]), label = X_target, missing = NA)
+xgtest <- xgb.DMatrix(data <- as.matrix(test.notmar[, X_features]), missing = NA)
+```
+
+- Setting Parameters
+```{r}
+params <- list()
+params$objective <- "reg:linear"
+params$eta <- 0.23
+params$max_depth <- 10
+params$subsample <- 1
+params$colsample_bytree <- 1
+params$min_child_weight <- 2
+params$eval_metric <- "rmse"
+```
+
+- building model
+
+```{r}
+model_xgb <- xgb.train(params <- params, xgtrain, nrounds <- 100)
+```
+
+- checking important Features
+
+```{r}
+vimp <- xgb.importance(model <- model_xgb, feature_names = X_features)
+```
+
+- Predicting
+
+```{r}
+pred_boost <- predict(model_xgb, xgtest)
+```
+
+- Submission
+
+```{r}
+submit$Purchase_boosted <- pred_boost 
+Final_submit <- submit
+```
+
+- Weighted Average of Decision tree and Boosting
+
+```{r}
+Final_submit<-Final_submit[,-c(4)]
+Final_submit$Purchase_1 <- (submit$Purchase + submit$Purchase_boosted)/2
+write.csv(Final_submit[,-c(3,4)], "result.csv", row.names = FALSE)
 ```

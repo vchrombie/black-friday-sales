@@ -1,56 +1,96 @@
-train.df <- read.csv("train.csv", header = TRUE)
-test.df <- read.csv("test.csv", header = TRUE) 
+# Black friday
 
-dim(train.df)
-dim(test.df)
+set.seed(23)
 
-train.df
+#loading data
+path_train <- "train.csv"
+path_test <- "test.csv"
 
-any(is.na(train.df))
+train <- read.csv(path_train , header = T)
+test <- read.csv(path_test , header = T)
 
-names(which(sapply(train.df, anyNA)))
+train[10][is.na(train[10])] <- 20
+train[11][is.na(train[11])] <- 20
 
-summary(train.df)
-summary(test.df)
+test[10][is.na(test[10])] <- 20
+test[11][is.na(test[11])] <- 20
 
-train.df[10][is.na(train.df[10])] <- 20
-train.df[11][is.na(train.df[11])] <- 20
+train$data <- 1
+test$Purchase <- 0
+test$data <- 0
 
-test.df[10][is.na(test.df[10])] <- 20
-test.df[11][is.na(test.df[11])] <- 20
+total <- rbind(train,test)
 
-sum(is.na(train.df))
-sum(is.na(test.df))
+for (i in 1:11)
+{
+  total[,i] <- as.factor(total[,i])
+}
 
-X_train = train.df[3:11]
-Y_train = train.df[12]
+train.notmar <- total[total$Marital_Status == 0 ,] 
+train.notmar <- train.notmar[train.notmar$data == 1,]
+test.notmar <- total[total$data == 0 ,]
 
-X_test = test.df[3:11]  
+test.notmar$Purchase <- NULL
+test.notmar$data <- NULL
+train.notmar$data <- NULL
 
-library(data.table)
-library(mltools)
-
-X_train <- one_hot(as.data.table(X_train))
-X_test <- one_hot(as.data.table(X_test))
-
-X_train$Product_Category_1 = scale(X_train$Product_Category_1)
-X_train$Product_Category_2 = scale(X_train$Product_Category_2)
-X_train$Product_Category_3 = scale(X_train$Product_Category_3)
-
-X_test$Product_Category_1 = scale(X_test$Product_Category_1)
-X_test$Product_Category_2 = scale(X_test$Product_Category_2)
-X_test$Product_Category_3 = scale(X_test$Product_Category_3)
-
-X_train$Purchases <- Y_train
-
+#Decision Tree
 library(rpart)
 
-model = rpart(Purchases~.,data = X_train)
+model <- rpart(Purchase ~ .,data = train.notmar)
+pred_tree <- predict(model, test.notmar)
 
-Y_pred = predict(model, X_test)
+submit <- data.frame(User_ID = test$User_ID,
+                     Product_ID = test$Product_ID,
+                     Purchase = pred_tree)
 
-df <- data.frame(User_ID = test.df$User_ID, Product_ID = test.df$Product_ID, Purchase = Y_pred)
+# XGboost
+library(xgboost)
 
-head(df)
+for (i in 1:12)
+{
+  train.notmar[,i] <-  as.numeric(train.notmar[,i])
+}
 
-write.csv(df,"result.csv",row.names = FALSE)
+for (i in 1:11)
+{
+  test.notmar[,i] <-  as.numeric(test.notmar[,i])
+}
+
+#Features 
+X_features <- c( "User_ID" , "Product_ID" , "Gender" ,                   
+                 "Age" , "Occupation" ,  "City_Category" ,           
+                 "Stay_In_Current_City_Years" , "Product_Category_1" ,       
+                 "Product_Category_2" , "Product_Category_3")
+X_target <- train.notmar$Purchase
+
+xgtrain <- xgb.DMatrix(data <- as.matrix(train.notmar[, X_features]), label = X_target, missing = NA)
+xgtest <- xgb.DMatrix(data <- as.matrix(test.notmar[, X_features]), missing = NA)
+
+#Setting Parameters
+params <- list()
+params$objective <- "reg:linear"
+params$eta <- 0.23
+params$max_depth <- 10
+params$subsample <- 1
+params$colsample_bytree <- 1
+params$min_child_weight <- 2
+params$eval_metric <- "rmse"
+
+#Model building 
+model_xgb <- xgb.train(params <- params, xgtrain, nrounds <- 100)
+
+#checking important Features
+vimp <- xgb.importance(model <- model_xgb, feature_names = X_features)
+
+# Predicting 
+pred_boost <- predict(model_xgb, xgtest)
+
+# Submission
+submit$Purchase_boosted <- pred_boost 
+Final_submit <- submit
+
+# Weighted Average of Decision tree and Boosting
+Final_submit<-Final_submit[,-c(4)]
+Final_submit$Purchase_1 <- (submit$Purchase + submit$Purchase_boosted)/2
+write.csv(Final_submit[,-c(3,4)], "result.csv", row.names = FALSE)

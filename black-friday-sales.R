@@ -92,5 +92,5 @@ Final_submit <- submit
 
 # Weighted Average of Decision tree and Boosting
 Final_submit<-Final_submit[,-c(4)]
-Final_submit$Purchase_1 <- (submit$Purchase + submit$Purchase_boosted)/2
+Final_submit$Purchase_1 <- (submit$Purchase + 2*submit$Purchase_boosted)/3
 write.csv(Final_submit[,-c(3,4)], "result.csv", row.names = FALSE)
